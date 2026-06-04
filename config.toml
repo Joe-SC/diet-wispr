@@ -1,0 +1,59 @@
+# diet-wispr configuration
+
+[hotkey]
+# Key that triggers dictation. For push-to-talk, prefer a key that emits NO
+# character (a printable key like space gets typed into your app while held).
+# "right ctrl" is ideal: hold it to talk, types nothing, never toggles anything.
+# Also valid: "f9", "right alt", or a combo like "ctrl+shift+f9".
+combo = "right ctrl"
+# "ptt"    = hold to record, release to transcribe (push-to-talk).
+# "toggle" = tap to start, tap to stop.
+mode = "ptt"
+
+[audio]
+# Microphone device: a substring of the device name, or an integer index, or
+# leave empty to use the system default. On startup the resolved device is printed.
+mic_device = ""
+# Capture rate. 24000 is required by the realtime engine (it only accepts 24 kHz
+# PCM16); the batch engine handles it fine too. If the device rejects it, we fall
+# back to the device default.
+sample_rate = 24000
+# Recordings shorter than this (seconds) are discarded without calling the API.
+min_seconds = 0.3
+
+[transcription]
+# "batch"    = record, then transcribe + (optional) cleanup. Arm B of the A/B.
+# "realtime" = stream audio while you speak; transcript ready on release. Arm A.
+# Right-click the floating dot to switch engines live and compare.
+engine = "batch"
+stt_model = "gpt-4o-mini-transcribe"
+
+[cleanup]
+# Light LLM pass to strip filler words and fix punctuation/capitalization.
+enabled = true
+cleanup_model = "gpt-4o-mini"
+
+[output]
+# Restore the previous clipboard contents after pasting.
+restore_clipboard = true
+# Seconds to wait after Ctrl+V before restoring the clipboard, so the target
+# app has consumed the paste.
+paste_delay = 0.15
+
+[feedback]
+# Short start/stop beep so you know the mic is live (Windows only).
+beep = true
+
+[indicator]
+# Floating always-on-top dot showing recording state (dim idle / red REC /
+# amber working). Click quits; right-click switches engine; drag to reposition.
+enabled = true
+# Where the dot starts. A named anchor (bottom-center, bottom-right, bottom-left,
+# top-center, top-right, top-left, center) or literal "x,y" pixels. Dragging the
+# dot rewrites this line with the new coordinates so it reopens where you left it.
+position = "1724,863"
+
+[debug]
+# Print every key the listener sees (canonical form). Turn on if the hotkey
+# isn't triggering, to see exactly what arrives.
+log_keys = false
