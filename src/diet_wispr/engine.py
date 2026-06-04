@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import io
 import threading
+import time
 
 import numpy as np
 import soundfile as sf
@@ -62,6 +63,11 @@ class BatchEngine:
         pass
 
 
+# OpenAI caps a Realtime session at 60 minutes, then closes with 1001 ("going
+# away"). Recycle proactively before that so a dictation never lands on the cap.
+_MAX_SESSION_SECONDS = 55 * 60
+
+
 class RealtimeEngine:
     name = "realtime"
 
@@ -75,22 +81,66 @@ class RealtimeEngine:
         self._lock = threading.Lock()
         self._parts: list[str] = []
         self._final = ""
-        self._error: object = None
+        self._conn_error: object = None  # connection-fatal -> triggers reconnect
+        self._utt_error: object = None  # per-utterance (transcription.failed)
+        self._connected_at = 0.0
         self._closing = False
 
     # --- connection lifecycle ---
 
+    def _healthy(self) -> bool:
+        """True only if the recv loop is alive and no connection error is pending.
+
+        A 1001 close (or any drop) makes _run_conn exit, so the thread is no
+        longer alive — that, not the stale _connected flag, is the liveness truth.
+        """
+        return (
+            self._connected.is_set()
+            and self._conn is not None
+            and self._conn_thread is not None
+            and self._conn_thread.is_alive()
+            and self._conn_error is None
+        )
+
     def _ensure_connected(self) -> None:
-        if self._connected.is_set():
-            if self._error:
-                raise RuntimeError(f"realtime connection error: {self._error}")
+        """Open a connection, reconnecting if the old one died or aged out."""
+        if self._healthy() and (time.time() - self._connected_at) < _MAX_SESSION_SECONDS:
             return
+        self._reset_conn()
+        self._open_conn()
+
+    def _open_conn(self) -> None:
+        self._closing = False
+        self._conn_error = None
+        self._connected.clear()
         self._conn_thread = threading.Thread(target=self._run_conn, daemon=True)
         self._conn_thread.start()
         if not self._connected.wait(timeout=15):
             raise RuntimeError("realtime: timed out opening connection")
-        if self._error:
-            raise RuntimeError(f"realtime connection error: {self._error}")
+        if self._conn_error:
+            raise RuntimeError(f"realtime connection error: {self._conn_error}")
+        self._connected_at = time.time()
+
+    def _reset_conn(self) -> None:
+        """Tear down the current connection and wait for its recv thread to exit.
+
+        We join the old thread *before* clearing error state so its dying except
+        block (which sets _conn_error) can't race a freshly-opened connection.
+        """
+        self._closing = True
+        conn = self._conn
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        if self._conn_thread is not None and self._conn_thread.is_alive():
+            self._conn_thread.join(timeout=2)
+        self._conn = None
+        self._conn_thread = None
+        self._connected.clear()
+        self._completed.clear()
+        self._conn_error = None
 
     def prewarm(self) -> None:
         """Open the connection ahead of time so the first dictation is snappy."""
@@ -127,8 +177,8 @@ class RealtimeEngine:
                 self._connected.set()
                 while not self._closing:
                     self._handle(conn.recv())
-        except Exception as exc:  # connection dropped/closed or setup failed
-            self._error = exc
+        except Exception as exc:  # connection dropped/closed (e.g. 1001) or setup failed
+            self._conn_error = exc
             self._connected.set()  # unblock any waiter
             self._completed.set()
 
@@ -143,10 +193,11 @@ class RealtimeEngine:
                 self._final = event.transcript or "".join(self._parts)
             self._completed.set()
         elif t == "conversation.item.input_audio_transcription.failed":
-            self._error = getattr(event, "error", "transcription failed")
+            self._utt_error = getattr(event, "error", "transcription failed")
             self._completed.set()
         elif t == "error":
-            self._error = getattr(event, "error", "realtime error")
+            # Treat a session/connection error as fatal so the next dictation reconnects.
+            self._conn_error = getattr(event, "error", "realtime error")
             self._completed.set()
 
     # --- streaming interface ---
@@ -156,7 +207,7 @@ class RealtimeEngine:
         with self._lock:
             self._parts = []
             self._final = ""
-        self._error = None
+        self._utt_error = None
         self._completed.clear()
         self._conn.send({"type": "input_audio_buffer.clear"})
 
@@ -171,8 +222,10 @@ class RealtimeEngine:
             return ""
         self._conn.send({"type": "input_audio_buffer.commit"})
         got = self._completed.wait(timeout=15)
-        if self._error:
-            raise RuntimeError(f"realtime error: {self._error}")
+        if self._conn_error:
+            raise RuntimeError(f"realtime connection error: {self._conn_error}")
+        if self._utt_error:
+            raise RuntimeError(f"realtime error: {self._utt_error}")
         with self._lock:
             text = self._final if (got and self._final) else "".join(self._parts)
         return text.strip()
