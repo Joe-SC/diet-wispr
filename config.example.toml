@@ -51,7 +51,7 @@ enabled = true
 # Where the dot starts. A named anchor (bottom-center, bottom-right, bottom-left,
 # top-center, top-right, top-left, center) or literal "x,y" pixels. Dragging the
 # dot rewrites this line with the new coordinates so it reopens where you left it.
-position = "1724,863"
+position = "bottom-center"
 
 [debug]
 # Print every key the listener sees (canonical form). Turn on if the hotkey

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -106,7 +107,18 @@ def load_settings() -> Settings:
 
     config_path = _find_config()
     if not config_path.is_file():
-        raise FileNotFoundError(f"config.toml not found (looked at {config_path}).")
+        # First run: seed config.toml from the shipped template so the tool
+        # works out of the box. Per-machine edits (mic, dot position) then stay
+        # local — config.toml is gitignored.
+        template = _PROJECT_ROOT / "config.example.toml"
+        if template.is_file():
+            shutil.copyfile(template, config_path)
+            print(f"Created {config_path} from config.example.toml. Edit it to taste.")
+        else:
+            raise FileNotFoundError(
+                f"config.toml not found (looked at {config_path}) and no "
+                f"config.example.toml to seed it from."
+            )
     with config_path.open("rb") as fh:
         cfg = tomllib.load(fh)
 

@@ -61,6 +61,10 @@ sees is printed, so you can confirm the combo is arriving.
 
 ## Configuration (`config.toml`)
 
+On first run the tool copies `config.example.toml` to `config.toml` and uses that.
+Edit `config.toml` to taste; it's per-machine and gitignored, so your changes never
+touch the repo.
+
 | Setting | Meaning |
 |---|---|
 | `hotkey.combo` | Trigger key, e.g. `right ctrl`, `f9`, or a combo like `ctrl+shift+f9`. Use a key that emits NO character (see below). |
