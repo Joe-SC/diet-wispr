@@ -24,13 +24,11 @@ Two interchangeable engines (switch live by **right-clicking the dot**):
 ## Setup
 
 ```powershell
-cd C:\Source\diet-wispr
+git clone https://github.com/Joe-SC/diet-wispr.git
+cd diet-wispr
 uv sync
-copy .env-example .env      # then edit .env and set OPENAI_KEY
+copy .env-example .env      # then edit .env and set OPENAI_API_KEY
 ```
-
-This project uses `OPENAI_KEY` (the Orbis workspace convention), **not** the
-SDK's default `OPENAI_API_KEY`.
 
 ## Run
 

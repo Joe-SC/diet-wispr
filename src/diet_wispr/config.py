@@ -1,4 +1,4 @@
-"""Configuration loading: merges config.toml with the OPENAI_KEY from .env."""
+"""Configuration loading: merges config.toml with the OPENAI_API_KEY from .env."""
 
 from __future__ import annotations
 
@@ -98,10 +98,10 @@ def load_settings() -> Settings:
     load_dotenv(_PROJECT_ROOT / ".env")
     load_dotenv()  # also pick up a .env in the current working directory
 
-    openai_key = os.getenv("OPENAI_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
     if not openai_key:
         raise ValueError(
-            "OPENAI_KEY environment variable not set. "
+            "OPENAI_API_KEY environment variable not set. "
             "Copy .env-example to .env and add your key."
         )
 
